@@ -91,8 +91,8 @@ install_homebrew() {
   info "관리자 암호(Mac 로그인 암호)를 물어볼 수 있습니다."
   echo ""
 
-  /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" \
-    || die "Homebrew 설치 실패. 인터넷 연결을 확인해주세요."
+  /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" </dev/tty \
+    || die "Homebrew 설치 실패. Mac 로그인 암호를 올바르게 입력했는지 확인해주세요."
 
   # Apple Silicon PATH 설정
   if [[ "$ARCH" == arm64 ]]; then
