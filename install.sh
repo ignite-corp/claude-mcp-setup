@@ -10,7 +10,7 @@
 set -euo pipefail
 
 SETUP_URL="https://raw.githubusercontent.com/ignite-corp/claude-mcp-setup/main/setup.sh"
-TMP=$(mktemp /tmp/claude-mcp-setup.XXXXXX.sh)
+TMP=$(mktemp /tmp/claude-mcp-setup.XXXXXX)
 
 cleanup() { rm -f "$TMP"; }
 trap cleanup EXIT
