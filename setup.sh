@@ -256,75 +256,80 @@ PYEOF
   ok "Claude Code 인증 및 설정 완료"
 }
 
-# ─── 6. mcp-atlassian ────────────────────────────────────────────────────────
+# ─── 5. mcp-atlassian (uv) ───────────────────────────────────────────────────
 install_mcp() {
   step "[5/6] MCP Atlassian 서버 설치"
 
-  local venv="$HOME/.mcp-atlassian-venv"
-
-  if [[ -f "$venv/bin/mcp-atlassian" ]]; then
-    ok "mcp-atlassian 설치됨 — 스킵"
+  if command -v uvx &>/dev/null; then
+    ok "uv 설치됨 — 스킵"
     return
   fi
 
-  if ! command -v python3 &>/dev/null; then
-    start_spinner "Python 설치 중..."
-    brew install python3 &>/dev/null
-    stop_spinner
-  fi
-
-  start_spinner "Python 가상환경 생성 중..."
-  python3 -m venv "$venv" &>/dev/null
+  start_spinner "uv 설치 중..."
+  brew install uv &>/dev/null \
+    || die "uv 설치 실패"
   stop_spinner
 
-  start_spinner "mcp-atlassian 패키지 설치 중... (1~2분 소요)"
-  "$venv/bin/pip" install --quiet mcp-atlassian \
-    || die "mcp-atlassian 설치 실패"
-  stop_spinner
-
-  ok "mcp-atlassian 설치 완료"
+  ok "uv 설치 완료"
+  info "mcp-atlassian은 실행 시 uvx가 자동으로 다운로드합니다."
 }
 
-# ─── 7. HMG Atlassian 계정 설정 ──────────────────────────────────────────────
+# ─── 6. Atlassian 연동 설정 ───────────────────────────────────────────────────
 configure_hmg() {
-  step "[6/6] HMG Atlassian 연동 설정"
+  step "[6/6] Atlassian 연동 설정"
 
   # 기존 설정 확인
-  local existing
-  existing=$(python3 - <<'PYEOF'
+  local existing_user existing_url
+  existing_user=$(python3 - <<'PYEOF'
 import json, os
 p = os.path.expanduser('~/.claude.json')
 try:
     d = json.load(open(p))
-    u = d.get('mcpServers', {}).get('mcp-atlassian-hmg', {}).get('env', {}).get('JIRA_USERNAME', '')
-    print(u)
+    print(d.get('mcpServers', {}).get('mcp-atlassian-hmg', {}).get('env', {}).get('JIRA_USERNAME', ''))
+except:
+    print('')
+PYEOF
+)
+  existing_url=$(python3 - <<'PYEOF'
+import json, os
+p = os.path.expanduser('~/.claude.json')
+try:
+    d = json.load(open(p))
+    print(d.get('mcpServers', {}).get('mcp-atlassian-hmg', {}).get('env', {}).get('JIRA_URL', ''))
 except:
     print('')
 PYEOF
 )
 
-  if [[ -n "$existing" ]]; then
-    info "현재 설정된 계정: $existing"
+  if [[ -n "$existing_user" ]]; then
+    info "현재 설정: $existing_user ($existing_url)"
     printf "  다시 설정할까요? [y/N]: "
     read -r ANSWER
     [[ "$ANSWER" =~ ^[Yy]$ ]] || { ok "기존 설정 유지"; return; }
     echo ""
   fi
 
-  echo -e "  ${Y}HMG Atlassian 계정 정보를 입력하세요.${N}"
+  echo -e "  ${Y}Atlassian 연동 정보를 입력하세요.${N}"
   echo ""
 
-  printf "  📧 HMG 이메일 주소: "
+  printf "  🌐 Atlassian URL (예: https://company.atlassian.net): "
+  read -r JIRA_URL_INPUT
+  [[ -n "$JIRA_URL_INPUT" ]] || die "URL이 입력되지 않았습니다."
+  # 끝 슬래시 제거
+  JIRA_URL_INPUT="${JIRA_URL_INPUT%/}"
+  CONFLUENCE_URL_INPUT="${JIRA_URL_INPUT}/wiki"
+
+  printf "  📧 이메일 주소: "
   read -r HMG_EMAIL
   [[ -n "$HMG_EMAIL" ]] || die "이메일 주소가 입력되지 않았습니다."
 
   echo ""
   echo -e "  ${D}──────────────────────────────────────────────${N}"
   echo -e "  ${W}API 토큰 발급 방법:${N}"
-  info "1. https://hmg.atlassian.net 접속 후 로그인"
+  info "1. ${JIRA_URL_INPUT} 접속 후 로그인"
   info "2. 우측 상단 프로필 클릭 → Manage account"
   info "3. Security 탭 → API tokens → Create API token"
-  info "4. 이름 입력 후 생성 → 토큰 복사"
+  info "4. 이름 입력 후 생성 → 토큰 복사 (한 번만 표시됨)"
   echo -e "  ${D}──────────────────────────────────────────────${N}"
   echo ""
 
@@ -333,7 +338,11 @@ PYEOF
   echo ""
   [[ -n "$HMG_TOKEN" ]] || die "API 토큰이 입력되지 않았습니다."
 
-  HMG_USER="$HMG_EMAIL" HMG_TOKEN="$HMG_TOKEN" python3 - <<'PYEOF'
+  HMG_USER="$HMG_EMAIL" \
+  HMG_TOKEN="$HMG_TOKEN" \
+  HMG_JIRA_URL="$JIRA_URL_INPUT" \
+  HMG_CONFLUENCE_URL="$CONFLUENCE_URL_INPUT" \
+  python3 - <<'PYEOF'
 import json, os
 
 p = os.path.expanduser('~/.claude.json')
@@ -344,13 +353,13 @@ if os.path.exists(p):
 
 config.setdefault('mcpServers', {})['mcp-atlassian-hmg'] = {
     'type': 'stdio',
-    'command': os.path.expanduser('~/.mcp-atlassian-venv/bin/mcp-atlassian'),
-    'args': [],
+    'command': 'uvx',
+    'args': ['mcp-atlassian'],
     'env': {
-        'JIRA_URL': 'https://hmg.atlassian.net',
+        'JIRA_URL': os.environ['HMG_JIRA_URL'],
         'JIRA_USERNAME': os.environ['HMG_USER'],
         'JIRA_API_TOKEN': os.environ['HMG_TOKEN'],
-        'CONFLUENCE_URL': 'https://hmg.atlassian.net/wiki',
+        'CONFLUENCE_URL': os.environ['HMG_CONFLUENCE_URL'],
         'CONFLUENCE_USERNAME': os.environ['HMG_USER'],
         'CONFLUENCE_API_TOKEN': os.environ['HMG_TOKEN']
     }
@@ -360,7 +369,9 @@ with open(p, 'w') as f:
     json.dump(config, f, indent=2, ensure_ascii=False)
 PYEOF
 
-  ok "HMG Atlassian 연동 설정 완료"
+  ok "Atlassian 연동 설정 완료"
+  info "Jira URL:      $JIRA_URL_INPUT"
+  info "Confluence URL: $CONFLUENCE_URL_INPUT"
 }
 
 # ─── 완료 ────────────────────────────────────────────────────────────────────
