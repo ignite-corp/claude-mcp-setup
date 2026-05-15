@@ -227,7 +227,7 @@ PYEOF
 )
     info "현재 설정된 Endpoint: $existing_endpoint"
     printf "  다시 설정할까요? [y/N]: "
-    read -r ANSWER
+    read -r ANSWER </dev/tty
     [[ "$ANSWER" =~ ^[Yy]$ ]] || { ok "기존 설정 유지"; return; }
     echo ""
   fi
@@ -238,11 +238,11 @@ PYEOF
   echo ""
 
   printf "  🌐 API Endpoint URL: "
-  read -r CLAUDE_ENDPOINT
+  read -r CLAUDE_ENDPOINT </dev/tty
   [[ -n "$CLAUDE_ENDPOINT" ]] || die "Endpoint URL이 입력되지 않았습니다."
 
   printf "  🔑 인증 토큰 (입력 내용이 보이지 않는 것이 정상입니다): "
-  read -rs CLAUDE_TOKEN
+  read -rs CLAUDE_TOKEN </dev/tty
   echo ""
   [[ -n "$CLAUDE_TOKEN" ]] || die "토큰이 입력되지 않았습니다."
 
@@ -318,7 +318,7 @@ PYEOF
   if [[ -n "$existing_user" ]]; then
     info "현재 설정: $existing_user ($existing_url)"
     printf "  다시 설정할까요? [y/N]: "
-    read -r ANSWER
+    read -r ANSWER </dev/tty
     [[ "$ANSWER" =~ ^[Yy]$ ]] || { ok "기존 설정 유지"; return; }
     echo ""
   fi
@@ -327,14 +327,14 @@ PYEOF
   echo ""
 
   printf "  🌐 Atlassian URL (예: https://company.atlassian.net): "
-  read -r JIRA_URL_INPUT
+  read -r JIRA_URL_INPUT </dev/tty
   [[ -n "$JIRA_URL_INPUT" ]] || die "URL이 입력되지 않았습니다."
   # 끝 슬래시 제거
   JIRA_URL_INPUT="${JIRA_URL_INPUT%/}"
   CONFLUENCE_URL_INPUT="${JIRA_URL_INPUT}/wiki"
 
   printf "  📧 이메일 주소: "
-  read -r HMG_EMAIL
+  read -r HMG_EMAIL </dev/tty
   [[ -n "$HMG_EMAIL" ]] || die "이메일 주소가 입력되지 않았습니다."
 
   echo ""
@@ -348,7 +348,7 @@ PYEOF
   echo ""
 
   printf "  🔑 API 토큰 (입력 내용이 보이지 않는 것이 정상입니다): "
-  read -rs HMG_TOKEN
+  read -rs HMG_TOKEN </dev/tty
   echo ""
   [[ -n "$HMG_TOKEN" ]] || die "API 토큰이 입력되지 않았습니다."
 
