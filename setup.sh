@@ -214,8 +214,22 @@ PYEOF
 )
 
   if [[ "$has_config" == "yes" ]]; then
-    ok "Claude Code 인증 설정됨 — 스킵"
-    return
+    local existing_endpoint
+    existing_endpoint=$(python3 - <<'PYEOF'
+import json, os
+p = os.path.expanduser('~/.claude/settings.json')
+try:
+    d = json.load(open(p))
+    print(d.get('env', {}).get('ANTHROPIC_BASE_URL', ''))
+except:
+    print('')
+PYEOF
+)
+    info "현재 설정된 Endpoint: $existing_endpoint"
+    printf "  다시 설정할까요? [y/N]: "
+    read -r ANSWER
+    [[ "$ANSWER" =~ ^[Yy]$ ]] || { ok "기존 설정 유지"; return; }
+    echo ""
   fi
 
   echo ""
