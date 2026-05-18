@@ -16,6 +16,10 @@ W='\033[1m'      # Bold
 D='\033[2m'      # Dim
 N='\033[0m'      # Reset
 
+# ─── 로그 파일 ───────────────────────────────────────────────────────────────
+LOG_FILE="/tmp/claude-setup-$(date +%s).log"
+echo "Setup started at $(date)" > "$LOG_FILE"
+
 # ─── 스피너 ──────────────────────────────────────────────────────────────────
 SPINNER_PID=""
 
@@ -59,20 +63,35 @@ banner() {
   echo ""
 }
 
-step() { echo ""; echo -e "${B}${W}▶ $*${N}"; }
-ok()   { echo -e "  ${G}✔${N}  $*"; }
-info() { echo -e "  ${D}→  $*${N}"; }
-warn() { echo -e "  ${Y}⚠${N}  $*"; }
-die()  { stop_spinner; echo -e "\n  ${R}✖  $*${N}\n"; exit 1; }
+step()  { echo ""; echo -e "${B}${W}▶ $*${N}"; }
+ok()    { echo -e "  ${G}✔${N}  $*"; }
+info()  { echo -e "  ${D}→  $*${N}"; }
+warn()  { echo -e "  ${Y}⚠${N}  $*"; }
+debug() { echo -e "  ${D}[DBG] $*${N}"; echo "[DBG] $*" >> "$LOG_FILE"; }
+die()   {
+  stop_spinner
+  echo -e "\n  ${R}✖  $*${N}"
+  echo -e "  ${Y}상세 로그: ${LOG_FILE}${N}\n"
+  echo "[FAIL] $*" >> "$LOG_FILE"
+  exit 1
+}
+
+run_log() {
+  # 명령을 실행하고 로그 파일에 출력 기록. 실패 시 exit code 반환
+  echo "[RUN] $*" >> "$LOG_FILE"
+  "$@" >>"$LOG_FILE" 2>&1
+}
 
 # ─── 1. 환경 확인 ─────────────────────────────────────────────────────────────
 check_env() {
   step "[1/6] 환경 확인"
 
+  debug "OSTYPE=$OSTYPE"
   [[ "$OSTYPE" == darwin* ]] || die "이 설치 도구는 macOS 전용입니다."
   ok "macOS 확인됨"
 
   ARCH=$(uname -m)
+  debug "ARCH=$ARCH"
   [[ "$ARCH" == arm64 ]] \
     && ok "Apple Silicon (M1/M2/M3/M4) 감지됨" \
     || ok "Intel Mac 감지됨"
@@ -83,6 +102,7 @@ install_homebrew() {
   step "[2/6] Homebrew (패키지 관리자)"
 
   if command -v brew &>/dev/null; then
+    debug "brew 경로: $(command -v brew)"
     ok "Homebrew 설치됨 — 스킵"
     return
   fi
@@ -109,30 +129,40 @@ install_node() {
   step "[3/6] NVM + Node.js 22"
 
   export NVM_DIR="$HOME/.nvm"
+  debug "NVM_DIR=$NVM_DIR"
 
   # ── NVM 설치 ────────────────────────────────────────────────────────────────
   if [[ ! -s "$NVM_DIR/nvm.sh" ]]; then
+    debug "nvm.sh 없음 → NVM 설치 시작"
     start_spinner "NVM 설치 중..."
-    # PROFILE=/dev/null: NVM 인스톨러가 .bashrc/.bash_profile 수정하지 않도록 억제
-    # zshrc는 아래서 직접 처리
     PROFILE=/dev/null bash -c \
       "$(curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh)" \
-      &>/dev/null \
+      >>"$LOG_FILE" 2>&1 \
       || die "NVM 설치 실패"
     stop_spinner
     ok "NVM 설치 완료"
   else
+    debug "nvm.sh 존재함 → 스킵"
     ok "NVM 설치됨 — 스킵"
   fi
 
+  debug "nvm.sh 로드 시작: $NVM_DIR/nvm.sh"
   # ── 현재 스크립트 세션에서 NVM 로드 ─────────────────────────────────────────
-  # set -u 가 NVM 내부 미선언 변수와 충돌하므로 일시적으로 해제
   set +u
   \. "$NVM_DIR/nvm.sh"
   set -u
+  debug "nvm.sh 로드 완료"
+
+  # nvm 명령어 확인
+  if ! command -v nvm &>/dev/null && ! type nvm &>/dev/null 2>&1; then
+    debug "nvm 함수 로드 실패 — type nvm: $(type nvm 2>&1 || echo 'not found')"
+  else
+    debug "nvm 로드 확인됨"
+  fi
 
   # ── ~/.zshrc에 NVM 초기화 추가 ───────────────────────────────────────────────
   if ! grep -q 'NVM_DIR' ~/.zshrc 2>/dev/null; then
+    debug "~/.zshrc에 NVM_DIR 없음 → 추가"
     cat >> ~/.zshrc <<'ZSHEOF'
 
 # NVM (Node Version Manager)
@@ -141,65 +171,94 @@ export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"
 ZSHEOF
     ok "~/.zshrc에 NVM 초기화 추가됨"
+  else
+    debug "~/.zshrc에 NVM_DIR 이미 있음"
   fi
 
   # ── Node.js 22 설치 및 고정 ──────────────────────────────────────────────────
   local current_ver
   current_ver=$(node --version 2>/dev/null || echo "none")
+  debug "현재 Node.js 버전: $current_ver"
 
   if [[ "$current_ver" == v22* ]]; then
     ok "Node.js $current_ver 설치됨 — 스킵"
   else
+    debug "Node.js 22 설치 시작 (nvm install 22)"
     start_spinner "Node.js 22 설치 중..."
-    nvm install 22 &>/dev/null || die "Node.js 22 설치 실패"
+    set +u
+    nvm install 22 >>"$LOG_FILE" 2>&1
+    local nvm_install_rc=$?
+    set -u
     stop_spinner
+    debug "nvm install 22 exit code: $nvm_install_rc"
+    [[ $nvm_install_rc -eq 0 ]] || die "Node.js 22 설치 실패 (exit $nvm_install_rc) — 로그: $LOG_FILE"
     ok "Node.js $(node --version) 설치 완료"
   fi
 
-  # 기본 버전으로 고정
+  debug "nvm alias default 22 실행"
   set +u
-  nvm alias default 22 &>/dev/null
-  nvm use 22 &>/dev/null
+  nvm alias default 22 >>"$LOG_FILE" 2>&1
+  debug "nvm alias exit code: $?"
+  nvm use 22 >>"$LOG_FILE" 2>&1
+  debug "nvm use 22 exit code: $?"
   set -u
 
   # nvm use 가 PATH를 업데이트하지만, curl | bash 환경에서 누락될 수 있으므로 명시적으로 추가
-  export PATH="$NVM_DIR/versions/node/v$(node --version | tr -d 'v')/bin:$PATH"
+  local node_ver_raw
+  node_ver_raw=$(node --version | tr -d 'v')
+  debug "node --version 결과: $node_ver_raw"
+  export PATH="$NVM_DIR/versions/node/v${node_ver_raw}/bin:$PATH"
+  debug "PATH에 node bin 추가됨: $NVM_DIR/versions/node/v${node_ver_raw}/bin"
+  debug "npm 경로: $(command -v npm 2>/dev/null || echo 'npm not found')"
 
   ok "Node.js 22 기본 버전으로 고정됨"
 }
 
-# ─── 5. Claude Code ───────────────────────────────────────────────────────────
+# ─── 4. Claude Code ───────────────────────────────────────────────────────────
 CLAUDE_VERSION="2.1.123"
 
 install_claude() {
   step "[4/6] Claude Code v${CLAUDE_VERSION}"
 
   # ── ~/.npmrc 레지스트리 설정 ─────────────────────────────────────────────────
+  debug "~/.npmrc 레지스트리 설정"
   echo "registry=https://nexus.auto-hmg.io/repository/npm-group/" > "$HOME/.npmrc"
+  debug "~/.npmrc 내용: $(cat "$HOME/.npmrc")"
+
+  debug "npm 레지스트리 확인: $(npm config get registry 2>/dev/null || echo 'npm 없음')"
 
   if command -v claude &>/dev/null; then
     local installed_ver
     installed_ver=$(claude --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || echo "unknown")
+    debug "claude 경로: $(command -v claude), 버전: $installed_ver"
     if [[ "$installed_ver" == "$CLAUDE_VERSION" ]]; then
       ok "Claude Code v${CLAUDE_VERSION} 설치됨 — 스킵"
     else
       warn "다른 버전 감지됨 (현재: $installed_ver → 대상: $CLAUDE_VERSION)"
+      debug "npm install -g @anthropic-ai/claude-code@${CLAUDE_VERSION} 시작"
       start_spinner "Claude Code v${CLAUDE_VERSION} 재설치 중..."
-      npm install -g "@anthropic-ai/claude-code@${CLAUDE_VERSION}" &>/dev/null \
-        || die "Claude Code 설치 실패"
+      npm install -g "@anthropic-ai/claude-code@${CLAUDE_VERSION}" >>"$LOG_FILE" 2>&1
+      local npm_rc=$?
       stop_spinner
+      debug "npm install exit code: $npm_rc"
+      [[ $npm_rc -eq 0 ]] || die "Claude Code 설치 실패 (exit $npm_rc) — 로그: $LOG_FILE"
       ok "Claude Code v${CLAUDE_VERSION} 설치 완료"
     fi
   else
+    debug "claude 명령 없음 → 신규 설치"
+    debug "npm install -g @anthropic-ai/claude-code@${CLAUDE_VERSION} 시작"
     start_spinner "Claude Code v${CLAUDE_VERSION} 설치 중..."
-    npm install -g "@anthropic-ai/claude-code@${CLAUDE_VERSION}" &>/dev/null \
-      || die "Claude Code 설치 실패"
+    npm install -g "@anthropic-ai/claude-code@${CLAUDE_VERSION}" >>"$LOG_FILE" 2>&1
+    local npm_rc=$?
     stop_spinner
+    debug "npm install exit code: $npm_rc"
+    [[ $npm_rc -eq 0 ]] || die "Claude Code 설치 실패 (exit $npm_rc) — 로그: $LOG_FILE"
     ok "Claude Code v${CLAUDE_VERSION} 설치 완료"
   fi
 
   # ── ~/.claude/settings.json 설정 ────────────────────────────────────────────
   mkdir -p "$HOME/.claude"
+  debug "~/.claude 디렉토리 확인"
 
   local has_config
   has_config=$(python3 - <<'PYEOF'
@@ -214,6 +273,7 @@ except:
     print('no')
 PYEOF
 )
+  debug "기존 Claude 설정 존재: $has_config"
 
   if [[ "$has_config" == "yes" ]]; then
     local existing_endpoint
@@ -248,6 +308,7 @@ PYEOF
   echo ""
   [[ -n "$CLAUDE_TOKEN" ]] || die "토큰이 입력되지 않았습니다."
 
+  debug "settings.json 업데이트 시작"
   CLAUDE_TOKEN="$CLAUDE_TOKEN" CLAUDE_ENDPOINT="$CLAUDE_ENDPOINT" python3 - <<'PYEOF'
 import json, os
 p = os.path.expanduser('~/.claude/settings.json')
@@ -268,6 +329,7 @@ config.setdefault('includeCoAuthoredBy', False)
 with open(p, 'w') as f:
     json.dump(config, f, indent=2, ensure_ascii=False)
 PYEOF
+  debug "settings.json 업데이트 완료"
 
   ok "Claude Code 인증 및 설정 완료"
 }
@@ -277,14 +339,18 @@ install_mcp() {
   step "[5/6] MCP Atlassian 서버 설치"
 
   if command -v uvx &>/dev/null; then
+    debug "uvx 경로: $(command -v uvx)"
     ok "uv 설치됨 — 스킵"
     return
   fi
 
+  debug "uvx 없음 → brew install uv 시작"
   start_spinner "uv 설치 중..."
-  brew install uv &>/dev/null \
-    || die "uv 설치 실패"
+  brew install uv >>"$LOG_FILE" 2>&1
+  local brew_rc=$?
   stop_spinner
+  debug "brew install uv exit code: $brew_rc"
+  [[ $brew_rc -eq 0 ]] || die "uv 설치 실패 (exit $brew_rc) — 로그: $LOG_FILE"
 
   ok "uv 설치 완료"
   info "mcp-atlassian은 실행 시 uvx가 자동으로 다운로드합니다."
@@ -316,6 +382,7 @@ except:
     print('')
 PYEOF
 )
+  debug "기존 Atlassian 설정 — user: '$existing_user', url: '$existing_url'"
 
   if [[ -n "$existing_user" ]]; then
     info "현재 설정: $existing_user ($existing_url)"
@@ -354,6 +421,7 @@ PYEOF
   echo ""
   [[ -n "$HMG_TOKEN" ]] || die "API 토큰이 입력되지 않았습니다."
 
+  debug "~/.claude.json mcp-atlassian-hmg 설정 업데이트"
   HMG_USER="$HMG_EMAIL" \
   HMG_TOKEN="$HMG_TOKEN" \
   HMG_JIRA_URL="$JIRA_URL_INPUT" \
@@ -401,6 +469,7 @@ done_msg() {
   echo -e "  ${W}연동 확인:${N}  Claude Code 실행 후 ${C}/mcp${N} 를 입력하세요."
   echo ""
   echo -e "  ${D}※ 모든 환경설정은 ~/.zshrc에 저장되었습니다.${N}"
+  echo -e "  ${D}※ 설치 로그: ${LOG_FILE}${N}"
   echo ""
 }
 
