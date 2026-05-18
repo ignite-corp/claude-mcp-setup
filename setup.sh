@@ -222,6 +222,13 @@ CLAUDE_VERSION="2.1.123"
 install_claude() {
   step "[4/6] Claude Code v${CLAUDE_VERSION}"
 
+  # ── NVM npm 절대 경로 확보 (시스템 npm 사용 방지) ──────────────────────────
+  local NPM="$NVM_DIR/versions/node/v$(node --version | tr -d 'v')/bin/npm"
+  if [[ ! -x "$NPM" ]]; then
+    NPM=$(command -v npm)
+  fi
+  debug "사용할 npm: $NPM"
+
   # ── ~/.npmrc 정리 (prefix 제거 + 레지스트리 설정) ───────────────────────
   debug "~/.npmrc 정리 시작"
   # prefix 설정이 있으면 제거 (NVM과 충돌 방지)
@@ -230,9 +237,9 @@ install_claude() {
   grep -qF 'registry=https://nexus.auto-hmg.io' "$HOME/.npmrc" 2>/dev/null \
     || echo "registry=https://nexus.auto-hmg.io/repository/npm-group/" >> "$HOME/.npmrc"
   debug "~/.npmrc 내용: $(cat "$HOME/.npmrc")"
-  debug "npm 경로: $(command -v npm), prefix: $(npm prefix -g 2>/dev/null)"
+  debug "npm prefix: $("$NPM" prefix -g 2>/dev/null)"
 
-  debug "npm 레지스트리 확인: $(npm config get registry 2>/dev/null || echo 'npm 없음')"
+  debug "npm 레지스트리 확인: $("$NPM" config get registry 2>/dev/null || echo 'npm 없음')"
 
   # ── Nexus 레지스트리 접근 가능 여부 사전 체크 ─────────────────────────────────
   if ! curl -sSf --max-time 10 "https://nexus.auto-hmg.io/repository/npm-group/" >/dev/null 2>&1; then
@@ -250,7 +257,7 @@ install_claude() {
       warn "다른 버전 감지됨 (현재: $installed_ver → 대상: $CLAUDE_VERSION)"
       debug "npm install -g @anthropic-ai/claude-code@${CLAUDE_VERSION} 시작"
       start_spinner "Claude Code v${CLAUDE_VERSION} 재설치 중..."
-      npm install -g "@anthropic-ai/claude-code@${CLAUDE_VERSION}" --fetch-timeout=60000 >>"$LOG_FILE" 2>&1
+      "$NPM" install -g "@anthropic-ai/claude-code@${CLAUDE_VERSION}" --fetch-timeout=60000 >>"$LOG_FILE" 2>&1
       local npm_rc=$?
       stop_spinner
       debug "npm install exit code: $npm_rc"
@@ -261,7 +268,7 @@ install_claude() {
     debug "claude 명령 없음 → 신규 설치"
     debug "npm install -g @anthropic-ai/claude-code@${CLAUDE_VERSION} 시작"
     start_spinner "Claude Code v${CLAUDE_VERSION} 설치 중..."
-    npm install -g "@anthropic-ai/claude-code@${CLAUDE_VERSION}" --fetch-timeout=60000 >>"$LOG_FILE" 2>&1
+    "$NPM" install -g "@anthropic-ai/claude-code@${CLAUDE_VERSION}" --fetch-timeout=60000 >>"$LOG_FILE" 2>&1
     local npm_rc=$?
     stop_spinner
     debug "npm install exit code: $npm_rc"
@@ -272,7 +279,7 @@ install_claude() {
   # ── claude 바이너리 검증 ──────────────────────────────────────────────
   if ! command -v claude &>/dev/null; then
     debug "claude 바이너리 없음 — npm rebuild 시도"
-    npm install -g "@anthropic-ai/claude-code@${CLAUDE_VERSION}" --force --fetch-timeout=60000 >>"$LOG_FILE" 2>&1
+    "$NPM" install -g "@anthropic-ai/claude-code@${CLAUDE_VERSION}" --force --fetch-timeout=60000 >>"$LOG_FILE" 2>&1
     if ! command -v claude &>/dev/null; then
       # 수동 심링크 생성
       local nvm_bin="$NVM_DIR/versions/node/v$(node --version | tr -d 'v')/bin"
