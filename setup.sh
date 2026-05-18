@@ -222,15 +222,15 @@ CLAUDE_VERSION="2.1.123"
 install_claude() {
   step "[4/6] Claude Code v${CLAUDE_VERSION}"
 
-  # ── ~/.npmrc 레지스트리 설정 ─────────────────────────────────────────────────
-  debug "~/.npmrc 레지스트리 설정"
-  echo "registry=https://nexus.auto-hmg.io/repository/npm-group/" > "$HOME/.npmrc"
+  # ── ~/.npmrc 정리 (prefix 제거 + 레지스트리 설정) ───────────────────────
+  debug "~/.npmrc 정리 시작"
+  # prefix 설정이 있으면 제거 (NVM과 충돌 방지)
+  sed -i '' '/^prefix/d' "$HOME/.npmrc" 2>/dev/null || true
+  # 레지스트리 설정
+  grep -qF 'registry=https://nexus.auto-hmg.io' "$HOME/.npmrc" 2>/dev/null \
+    || echo "registry=https://nexus.auto-hmg.io/repository/npm-group/" >> "$HOME/.npmrc"
   debug "~/.npmrc 내용: $(cat "$HOME/.npmrc")"
-
-  # ── 잘못된 npm prefix 제거 (NVM이 올바른 prefix를 자동 사용하도록) ──────────
-  npm config delete prefix 2>/dev/null || true
-  debug "npm prefix 삭제 완료 — 현재 prefix: $(npm prefix -g 2>/dev/null)"
-  debug "npm 경로: $(command -v npm)"
+  debug "npm 경로: $(command -v npm), prefix: $(npm prefix -g 2>/dev/null)"
 
   debug "npm 레지스트리 확인: $(npm config get registry 2>/dev/null || echo 'npm 없음')"
 
@@ -268,6 +268,26 @@ install_claude() {
     [[ $npm_rc -eq 0 ]] || die "Claude Code 설치 실패 (exit $npm_rc) — 로그: $LOG_FILE"
     ok "Claude Code v${CLAUDE_VERSION} 설치 완료"
   fi
+
+  # ── claude 바이너리 검증 ──────────────────────────────────────────────
+  if ! command -v claude &>/dev/null; then
+    debug "claude 바이너리 없음 — npm rebuild 시도"
+    npm install -g "@anthropic-ai/claude-code@${CLAUDE_VERSION}" --force --fetch-timeout=60000 >>"$LOG_FILE" 2>&1
+    if ! command -v claude &>/dev/null; then
+      # 수동 심링크 생성
+      local nvm_bin="$NVM_DIR/versions/node/v$(node --version | tr -d 'v')/bin"
+      local cli_js="$NVM_DIR/versions/node/v$(node --version | tr -d 'v')/lib/node_modules/@anthropic-ai/claude-code/cli.js"
+      if [[ -f "$cli_js" ]]; then
+        ln -sf "$cli_js" "$nvm_bin/claude"
+        chmod +x "$nvm_bin/claude"
+        debug "수동 심링크 생성: $nvm_bin/claude -> $cli_js"
+        ok "claude 심링크 수동 생성 완료"
+      else
+        die "Claude Code 설치는 성공했으나 실행 파일을 찾을 수 없습니다. 로그: $LOG_FILE"
+      fi
+    fi
+  fi
+  debug "claude 경로 확인: $(command -v claude 2>/dev/null)"
 
   # ── ~/.claude/settings.json 설정 ────────────────────────────────────────────
   mkdir -p "$HOME/.claude"
