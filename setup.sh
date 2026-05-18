@@ -175,6 +175,14 @@ CLAUDE_VERSION="2.1.123"
 install_claude() {
   step "[4/6] Claude Code v${CLAUDE_VERSION}"
 
+  # ── ~/.npmrc 레지스트리 설정 ─────────────────────────────────────────────────
+  local npmrc="$HOME/.npmrc"
+  local registry="registry=https://nexus.auto-hmg.io/repository/npm-group/"
+  if ! grep -qF "$registry" "$npmrc" 2>/dev/null; then
+    echo "$registry" >> "$npmrc"
+    ok "npm 레지스트리 설정됨"
+  fi
+
   if command -v claude &>/dev/null; then
     local installed_ver
     installed_ver=$(claude --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || echo "unknown")
