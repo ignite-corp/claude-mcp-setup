@@ -227,6 +227,14 @@ install_claude() {
   echo "registry=https://nexus.auto-hmg.io/repository/npm-group/" > "$HOME/.npmrc"
   debug "~/.npmrc 내용: $(cat "$HOME/.npmrc")"
 
+  # ── npm global prefix를 NVM 경로로 강제 설정 (시스템 npm prefix 충돌 방지) ──
+  local nvm_node_ver
+  nvm_node_ver=$(node --version | tr -d 'v')
+  local nvm_prefix="$NVM_DIR/versions/node/v${nvm_node_ver}"
+  npm config set prefix "$nvm_prefix" 2>/dev/null || true
+  debug "npm prefix 설정: $nvm_prefix"
+  debug "npm 경로: $(command -v npm), prefix: $(npm prefix -g 2>/dev/null)"
+
   debug "npm 레지스트리 확인: $(npm config get registry 2>/dev/null || echo 'npm 없음')"
 
   # ── Nexus 레지스트리 접근 가능 여부 사전 체크 ─────────────────────────────────
