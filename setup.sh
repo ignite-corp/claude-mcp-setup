@@ -148,9 +148,10 @@ install_node() {
 
   debug "nvm.sh 로드 시작: $NVM_DIR/nvm.sh"
   # ── 현재 스크립트 세션에서 NVM 로드 ─────────────────────────────────────────
-  set +u
+  # nvm.sh 내부에서 non-zero exit 또는 미선언 변수가 있어 -e/-u 일시 해제
+  set +euo pipefail
   \. "$NVM_DIR/nvm.sh"
-  set -u
+  set -euo pipefail
   debug "nvm.sh 로드 완료"
 
   # nvm 명령어 확인
@@ -185,10 +186,10 @@ ZSHEOF
   else
     debug "Node.js 22 설치 시작 (nvm install 22)"
     start_spinner "Node.js 22 설치 중..."
-    set +u
+    set +euo pipefail
     nvm install 22 >>"$LOG_FILE" 2>&1
     local nvm_install_rc=$?
-    set -u
+    set -euo pipefail
     stop_spinner
     debug "nvm install 22 exit code: $nvm_install_rc"
     [[ $nvm_install_rc -eq 0 ]] || die "Node.js 22 설치 실패 (exit $nvm_install_rc) — 로그: $LOG_FILE"
@@ -196,12 +197,12 @@ ZSHEOF
   fi
 
   debug "nvm alias default 22 실행"
-  set +u
+  set +euo pipefail
   nvm alias default 22 >>"$LOG_FILE" 2>&1
   debug "nvm alias exit code: $?"
   nvm use 22 >>"$LOG_FILE" 2>&1
   debug "nvm use 22 exit code: $?"
-  set -u
+  set -euo pipefail
 
   # nvm use 가 PATH를 업데이트하지만, curl | bash 환경에서 누락될 수 있으므로 명시적으로 추가
   local node_ver_raw
