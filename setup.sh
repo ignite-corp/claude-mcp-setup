@@ -149,8 +149,9 @@ install_node() {
   debug "nvm.sh 로드 시작: $NVM_DIR/nvm.sh"
   # ── 현재 스크립트 세션에서 NVM 로드 ─────────────────────────────────────────
   # nvm.sh 내부에서 non-zero exit 또는 미선언 변수가 있어 -e/-u 일시 해제
+  # curl | bash 실행 시 stdin이 파이프(EOF)이므로 /dev/tty로 명시 연결
   set +euo pipefail
-  \. "$NVM_DIR/nvm.sh"
+  \. "$NVM_DIR/nvm.sh" < /dev/tty
   set -euo pipefail
   debug "nvm.sh 로드 완료"
 
