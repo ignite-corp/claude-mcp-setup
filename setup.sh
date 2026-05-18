@@ -229,6 +229,12 @@ install_claude() {
 
   debug "npm 레지스트리 확인: $(npm config get registry 2>/dev/null || echo 'npm 없음')"
 
+  # ── Nexus 레지스트리 접근 가능 여부 사전 체크 ─────────────────────────────────
+  if ! curl -sSf --max-time 10 "https://nexus.auto-hmg.io/repository/npm-group/" >/dev/null 2>&1; then
+    die "Nexus 레지스트리(nexus.auto-hmg.io)에 연결할 수 없습니다. VPN 연결 상태를 확인해주세요."
+  fi
+  debug "Nexus 레지스트리 연결 확인됨"
+
   if command -v claude &>/dev/null; then
     local installed_ver
     installed_ver=$(claude --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || echo "unknown")
@@ -239,7 +245,7 @@ install_claude() {
       warn "다른 버전 감지됨 (현재: $installed_ver → 대상: $CLAUDE_VERSION)"
       debug "npm install -g @anthropic-ai/claude-code@${CLAUDE_VERSION} 시작"
       start_spinner "Claude Code v${CLAUDE_VERSION} 재설치 중..."
-      npm install -g "@anthropic-ai/claude-code@${CLAUDE_VERSION}" >>"$LOG_FILE" 2>&1
+      npm install -g "@anthropic-ai/claude-code@${CLAUDE_VERSION}" --fetch-timeout=60000 >>"$LOG_FILE" 2>&1
       local npm_rc=$?
       stop_spinner
       debug "npm install exit code: $npm_rc"
@@ -250,7 +256,7 @@ install_claude() {
     debug "claude 명령 없음 → 신규 설치"
     debug "npm install -g @anthropic-ai/claude-code@${CLAUDE_VERSION} 시작"
     start_spinner "Claude Code v${CLAUDE_VERSION} 설치 중..."
-    npm install -g "@anthropic-ai/claude-code@${CLAUDE_VERSION}" >>"$LOG_FILE" 2>&1
+    npm install -g "@anthropic-ai/claude-code@${CLAUDE_VERSION}" --fetch-timeout=60000 >>"$LOG_FILE" 2>&1
     local npm_rc=$?
     stop_spinner
     debug "npm install exit code: $npm_rc"
