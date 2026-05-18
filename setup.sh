@@ -160,11 +160,10 @@ ZSHEOF
   set +u
   nvm alias default 22 &>/dev/null
   nvm use 22 &>/dev/null
-  local node_bin_path="$NVM_DIR/versions/node/$(nvm version)/bin"
   set -u
 
-  # 현재 세션 PATH 즉시 반영
-  export PATH="$node_bin_path:$PATH"
+  # nvm use 가 PATH를 업데이트하지만, curl | bash 환경에서 누락될 수 있으므로 명시적으로 추가
+  export PATH="$NVM_DIR/versions/node/v$(node --version | tr -d 'v')/bin:$PATH"
 
   ok "Node.js 22 기본 버전으로 고정됨"
 }
