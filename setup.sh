@@ -210,8 +210,21 @@ ZSHEOF
   node_ver_raw=$(node --version | tr -d 'v')
   debug "node --version 결과: $node_ver_raw"
   export PATH="$NVM_DIR/versions/node/v${node_ver_raw}/bin:$PATH"
+  hash -r 2>/dev/null || true
   debug "PATH에 node bin 추가됨: $NVM_DIR/versions/node/v${node_ver_raw}/bin"
   debug "npm 경로: $(command -v npm 2>/dev/null || echo 'npm not found')"
+
+  # nvm alias default=system 대비: ~/.zshrc에 node bin PATH 직접 명시
+  if ! grep -qF 'nvm/versions/node' ~/.zshrc 2>/dev/null; then
+    cat >> ~/.zshrc <<ZSHEOF
+
+# Node.js bin PATH (nvm default alias 무관하게 보장)
+export PATH="\$NVM_DIR/versions/node/v${node_ver_raw}/bin:\$PATH"
+ZSHEOF
+    debug "~/.zshrc에 node bin PATH 직접 추가됨 (v${node_ver_raw})"
+  else
+    debug "~/.zshrc에 nvm node PATH 이미 있음 — 스킵"
+  fi
 
   ok "Node.js 22 기본 버전으로 고정됨"
 }
