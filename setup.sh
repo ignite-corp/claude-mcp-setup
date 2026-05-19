@@ -431,7 +431,7 @@ install_mcp() {
 
   # mcp-atlassian을 미리 설치 (Claude Code 실행 시 네트워크 불필요)
   local mcp_bin
-  mcp_bin=$(uv tool dir 2>/dev/null)/bin/mcp-atlassian
+  mcp_bin=$(uv tool dir 2>/dev/null)/mcp-atlassian/bin/mcp-atlassian
   if [[ -x "$mcp_bin" ]]; then
     debug "mcp-atlassian 이미 설치됨: $mcp_bin — 스킵"
     ok "mcp-atlassian 준비됨 — 스킵"
@@ -532,7 +532,7 @@ if os.path.exists(p):
 import subprocess
 mcp_bin = subprocess.run(
     ['uv', 'tool', 'dir'], capture_output=True, text=True
-).stdout.strip() + '/bin/mcp-atlassian'
+).stdout.strip() + '/mcp-atlassian/bin/mcp-atlassian'
 
 config.setdefault('mcpServers', {})['mcp-atlassian-hmg'] = {
     'type': 'stdio',
