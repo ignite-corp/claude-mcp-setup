@@ -420,11 +420,11 @@ install_mcp() {
     ok "Python 3.12 준비됨 — 스킵"
   else
     info "Python 3.12 설치 중... (최초 1회, 수분 소요될 수 있습니다)"
-    start_spinner "Python 3.12 설치 중 (uv)..."
-    uv python install 3.12 >>"$LOG_FILE" 2>&1
+    start_spinner "Python 3.12 설치 중 (brew)..."
+    brew install python@3.12 >>"$LOG_FILE" 2>&1
     local py_rc=$?
     stop_spinner
-    debug "uv python install 3.12 exit code: $py_rc"
+    debug "brew install python@3.12 exit code: $py_rc"
     [[ $py_rc -eq 0 ]] || die "Python 3.12 설치 실패 (exit $py_rc) — 로그: $LOG_FILE"
     ok "Python 3.12 설치 완료"
   fi
