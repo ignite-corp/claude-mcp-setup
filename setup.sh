@@ -368,7 +368,10 @@ p = os.path.expanduser('~/.claude/settings.json')
 config = {}
 if os.path.exists(p):
     with open(p) as f:
-        config = json.load(f)
+        try:
+            config = json.load(f)
+        except json.JSONDecodeError:
+            config = {}
 
 config.setdefault('env', {}).update({
     'ANTHROPIC_AUTH_TOKEN': os.environ['CLAUDE_TOKEN'],
@@ -486,7 +489,10 @@ p = os.path.expanduser('~/.claude.json')
 config = {}
 if os.path.exists(p):
     with open(p) as f:
-        config = json.load(f)
+        try:
+            config = json.load(f)
+        except json.JSONDecodeError:
+            config = {}
 
 config.setdefault('mcpServers', {})['mcp-atlassian-hmg'] = {
     'type': 'stdio',
