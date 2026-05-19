@@ -397,6 +397,11 @@ install_mcp() {
   if command -v uvx &>/dev/null; then
     debug "uvx 경로: $(command -v uvx)"
     ok "uv 설치됨 — 스킵"
+    debug "Python 3.12 설치 여부 확인"
+    start_spinner "Python 3.12 확인 중..."
+    uv python install 3.12 >>"$LOG_FILE" 2>&1
+    stop_spinner
+    ok "Python 3.12 준비됨"
     return
   fi
 
@@ -409,6 +414,16 @@ install_mcp() {
   [[ $brew_rc -eq 0 ]] || die "uv 설치 실패 (exit $brew_rc) — 로그: $LOG_FILE"
 
   ok "uv 설치 완료"
+
+  debug "mcp-atlassian 요구 Python 3.12 설치 시작"
+  start_spinner "Python 3.12 설치 중 (uv)..."
+  uv python install 3.12 >>"$LOG_FILE" 2>&1
+  local py_rc=$?
+  stop_spinner
+  debug "uv python install 3.12 exit code: $py_rc"
+  [[ $py_rc -eq 0 ]] || die "Python 3.12 설치 실패 (exit $py_rc) — 로그: $LOG_FILE"
+
+  ok "Python 3.12 설치 완료"
   info "mcp-atlassian은 실행 시 uvx가 자동으로 다운로드합니다."
 }
 
@@ -497,7 +512,7 @@ if os.path.exists(p):
 config.setdefault('mcpServers', {})['mcp-atlassian-hmg'] = {
     'type': 'stdio',
     'command': 'uvx',
-    'args': ['mcp-atlassian'],
+    'args': ['--python', '3.12', 'mcp-atlassian'],
     'env': {
         'JIRA_URL': os.environ['HMG_JIRA_URL'],
         'JIRA_USERNAME': os.environ['HMG_USER'],
