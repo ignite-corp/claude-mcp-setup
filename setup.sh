@@ -397,33 +397,32 @@ install_mcp() {
   if command -v uvx &>/dev/null; then
     debug "uvx 경로: $(command -v uvx)"
     ok "uv 설치됨 — 스킵"
-    debug "Python 3.12 설치 여부 확인"
-    start_spinner "Python 3.12 확인 중..."
-    uv python install 3.12 >>"$LOG_FILE" 2>&1
+  else
+    debug "uvx 없음 → brew install uv 시작"
+    start_spinner "uv 설치 중..."
+    brew install uv >>"$LOG_FILE" 2>&1
+    local brew_rc=$?
     stop_spinner
-    ok "Python 3.12 준비됨"
-    return
+    debug "brew install uv exit code: $brew_rc"
+    [[ $brew_rc -eq 0 ]] || die "uv 설치 실패 (exit $brew_rc) — 로그: $LOG_FILE"
+    ok "uv 설치 완료"
   fi
 
-  debug "uvx 없음 → brew install uv 시작"
-  start_spinner "uv 설치 중..."
-  brew install uv >>"$LOG_FILE" 2>&1
-  local brew_rc=$?
-  stop_spinner
-  debug "brew install uv exit code: $brew_rc"
-  [[ $brew_rc -eq 0 ]] || die "uv 설치 실패 (exit $brew_rc) — 로그: $LOG_FILE"
+  # Python 3.12 설치 여부 확인 (이미 있으면 즉시 완료)
+  if uv python list --only-installed 2>/dev/null | grep -q "cpython-3\.12"; then
+    debug "Python 3.12 이미 설치됨 — 스킵"
+    ok "Python 3.12 준비됨 — 스킵"
+  else
+    info "Python 3.12 설치 중... (최초 1회, 수분 소요될 수 있습니다)"
+    start_spinner "Python 3.12 설치 중 (uv)..."
+    uv python install 3.12 >>"$LOG_FILE" 2>&1
+    local py_rc=$?
+    stop_spinner
+    debug "uv python install 3.12 exit code: $py_rc"
+    [[ $py_rc -eq 0 ]] || die "Python 3.12 설치 실패 (exit $py_rc) — 로그: $LOG_FILE"
+    ok "Python 3.12 설치 완료"
+  fi
 
-  ok "uv 설치 완료"
-
-  debug "mcp-atlassian 요구 Python 3.12 설치 시작"
-  start_spinner "Python 3.12 설치 중 (uv)..."
-  uv python install 3.12 >>"$LOG_FILE" 2>&1
-  local py_rc=$?
-  stop_spinner
-  debug "uv python install 3.12 exit code: $py_rc"
-  [[ $py_rc -eq 0 ]] || die "Python 3.12 설치 실패 (exit $py_rc) — 로그: $LOG_FILE"
-
-  ok "Python 3.12 설치 완료"
   info "mcp-atlassian은 실행 시 uvx가 자동으로 다운로드합니다."
 }
 
