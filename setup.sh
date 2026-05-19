@@ -429,7 +429,22 @@ install_mcp() {
     ok "Python 3.12 설치 완료"
   fi
 
-  info "mcp-atlassian은 실행 시 uvx가 자동으로 다운로드합니다."
+  # mcp-atlassian을 미리 설치 (Claude Code 실행 시 네트워크 불필요)
+  local mcp_bin
+  mcp_bin=$(uv tool dir 2>/dev/null)/bin/mcp-atlassian
+  if [[ -x "$mcp_bin" ]]; then
+    debug "mcp-atlassian 이미 설치됨: $mcp_bin — 스킵"
+    ok "mcp-atlassian 준비됨 — 스킵"
+  else
+    info "mcp-atlassian 설치 중..."
+    start_spinner "mcp-atlassian 설치 중 (uv tool install)..."
+    UV_NATIVE_TLS=1 uv tool install mcp-atlassian --python 3.12 >>"$LOG_FILE" 2>&1
+    local mcp_rc=$?
+    stop_spinner
+    debug "uv tool install mcp-atlassian exit code: $mcp_rc"
+    [[ $mcp_rc -eq 0 ]] || die "mcp-atlassian 설치 실패 (exit $mcp_rc) — 로그: $LOG_FILE"
+    ok "mcp-atlassian 설치 완료"
+  fi
 }
 
 # ─── 6. Atlassian 연동 설정 ───────────────────────────────────────────────────
@@ -514,12 +529,16 @@ if os.path.exists(p):
         except json.JSONDecodeError:
             config = {}
 
+import subprocess
+mcp_bin = subprocess.run(
+    ['uv', 'tool', 'dir'], capture_output=True, text=True
+).stdout.strip() + '/bin/mcp-atlassian'
+
 config.setdefault('mcpServers', {})['mcp-atlassian-hmg'] = {
     'type': 'stdio',
-    'command': 'uvx',
-    'args': ['--python', '3.12', 'mcp-atlassian'],
+    'command': mcp_bin,
+    'args': [],
     'env': {
-        'UV_NATIVE_TLS': '1',
         'JIRA_URL': os.environ['HMG_JIRA_URL'],
         'JIRA_USERNAME': os.environ['HMG_USER'],
         'JIRA_API_TOKEN': os.environ['HMG_TOKEN'],
