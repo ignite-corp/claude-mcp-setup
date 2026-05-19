@@ -408,9 +408,15 @@ install_mcp() {
     ok "uv 설치 완료"
   fi
 
-  # Python 3.12 설치 여부 확인 (이미 있으면 즉시 완료)
-  if uv python list --only-installed 2>/dev/null | grep -q "cpython-3\.12"; then
-    debug "Python 3.12 이미 설치됨 — 스킵"
+  # Python 3.12 설치 여부 확인 — 네트워크 없이 로컬에서만 확인
+  local py312_path
+  py312_path=$(command -v python3.12 2>/dev/null \
+    || uv python find 3.12 2>/dev/null \
+    || echo "")
+  debug "Python 3.12 경로 탐색 결과: ${py312_path:-없음}"
+
+  if [[ -n "$py312_path" ]]; then
+    debug "Python 3.12 이미 존재: $py312_path — 스킵"
     ok "Python 3.12 준비됨 — 스킵"
   else
     info "Python 3.12 설치 중... (최초 1회, 수분 소요될 수 있습니다)"
