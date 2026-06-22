@@ -84,7 +84,7 @@ run_log() {
 
 # ─── 1. 환경 확인 ─────────────────────────────────────────────────────────────
 check_env() {
-  step "[1/6] 환경 확인"
+  step "[1/7] 환경 확인"
 
   debug "OSTYPE=$OSTYPE"
   [[ "$OSTYPE" == darwin* ]] || die "이 설치 도구는 macOS 전용입니다."
@@ -99,7 +99,7 @@ check_env() {
 
 # ─── 2. Homebrew ──────────────────────────────────────────────────────────────
 install_homebrew() {
-  step "[2/6] Homebrew (패키지 관리자)"
+  step "[2/7] Homebrew (패키지 관리자)"
 
   if command -v brew &>/dev/null; then
     debug "brew 경로: $(command -v brew)"
@@ -126,7 +126,7 @@ install_homebrew() {
 
 # ─── 3. NVM + Node.js 22 ─────────────────────────────────────────────────────
 install_node() {
-  step "[3/6] NVM + Node.js 22"
+  step "[3/7] NVM + Node.js 22"
 
   export NVM_DIR="$HOME/.nvm"
   debug "NVM_DIR=$NVM_DIR"
@@ -233,7 +233,7 @@ ZSHEOF
 CLAUDE_VERSION="2.1.123"
 
 install_claude() {
-  step "[4/6] Claude Code v${CLAUDE_VERSION}"
+  step "[4/7] Claude Code v${CLAUDE_VERSION}"
 
   # ── NVM npm 절대 경로 확보 (시스템 npm 사용 방지) ──────────────────────────
   local NPM="$NVM_DIR/versions/node/v$(node --version | tr -d 'v')/bin/npm"
@@ -392,7 +392,7 @@ PYEOF
 
 # ─── 5. mcp-atlassian (uv) ───────────────────────────────────────────────────
 install_mcp() {
-  step "[5/6] MCP Atlassian 서버 설치"
+  step "[5/7] MCP Atlassian 서버 설치"
 
   if command -v uvx &>/dev/null; then
     debug "uvx 경로: $(command -v uvx)"
@@ -449,7 +449,7 @@ install_mcp() {
 
 # ─── 6. Atlassian 연동 설정 ───────────────────────────────────────────────────
 configure_hmg() {
-  step "[6/6] Atlassian 연동 설정"
+  step "[6/7] Atlassian 연동 설정"
 
   # 기존 설정 확인
   local existing_user existing_url
@@ -557,6 +557,96 @@ PYEOF
   info "Confluence URL: $CONFLUENCE_URL_INPUT"
 }
 
+# ─── 8. Ignite Atlassian 계정 설정 ───────────────────────────────────────────
+configure_ignite() {
+  step "[7/7] Ignite Atlassian 연동 설정"
+
+  local existing_user
+  existing_user=$(python3 - <<'PYEOF'
+import json, os
+p = os.path.expanduser('~/.claude.json')
+try:
+    d = json.load(open(p))
+    print(d.get('mcpServers', {}).get('mcp-atlassian-ignite', {}).get('env', {}).get('JIRA_USERNAME', ''))
+except:
+    print('')
+PYEOF
+)
+  debug "기존 Ignite Atlassian 설정 — user: '$existing_user'"
+
+  if [[ -n "$existing_user" ]]; then
+    info "현재 설정: $existing_user (https://ignitecorp.atlassian.net)"
+    printf "  다시 설정할까요? [y/N]: "
+    read -r ANSWER </dev/tty
+    [[ "$ANSWER" =~ ^[Yy]$ ]] || { ok "기존 설정 유지"; return; }
+    echo ""
+  fi
+
+  echo -e "  ${Y}Ignite Atlassian 계정 정보를 입력하세요.${N}"
+  echo ""
+
+  printf "  📧 Ignite 이메일 주소 (@ignite.co.kr): "
+  read -r IGNITE_EMAIL </dev/tty
+  [[ -n "$IGNITE_EMAIL" ]] || die "이메일 주소가 입력되지 않았습니다."
+
+  echo ""
+  echo -e "  ${D}──────────────────────────────────────────────${N}"
+  echo -e "  ${W}API 토큰 발급 방법:${N}"
+  info "1. https://ignitecorp.atlassian.net 접속 후 로그인"
+  info "2. 우측 상단 프로필 클릭 → Manage account"
+  info "3. Security 탭 → API tokens → Create API token"
+  info "4. 이름 입력 후 생성 → 토큰 복사 (한 번만 표시됨)"
+  echo -e "  ${D}──────────────────────────────────────────────${N}"
+  echo ""
+
+  printf "  🔑 API 토큰 (입력 내용이 보이지 않는 것이 정상입니다): "
+  read -rs IGNITE_TOKEN </dev/tty
+  echo ""
+  [[ -n "$IGNITE_TOKEN" ]] || die "API 토큰이 입력되지 않았습니다."
+
+  debug "~/.claude.json mcp-atlassian-ignite 설정 업데이트"
+  IGNITE_USER="$IGNITE_EMAIL" \
+  IGNITE_TOKEN="$IGNITE_TOKEN" \
+  python3 - <<'PYEOF'
+import json, os
+
+p = os.path.expanduser('~/.claude.json')
+config = {}
+if os.path.exists(p):
+    with open(p) as f:
+        try:
+            config = json.load(f)
+        except json.JSONDecodeError:
+            config = {}
+
+import subprocess
+mcp_bin = subprocess.run(
+    ['uv', 'tool', 'dir'], capture_output=True, text=True
+).stdout.strip() + '/mcp-atlassian/bin/mcp-atlassian'
+
+config.setdefault('mcpServers', {})['mcp-atlassian-ignite'] = {
+    'type': 'stdio',
+    'command': mcp_bin,
+    'args': [],
+    'env': {
+        'JIRA_URL': 'https://ignitecorp.atlassian.net',
+        'JIRA_USERNAME': os.environ['IGNITE_USER'],
+        'JIRA_API_TOKEN': os.environ['IGNITE_TOKEN'],
+        'CONFLUENCE_URL': 'https://ignitecorp.atlassian.net/wiki',
+        'CONFLUENCE_USERNAME': os.environ['IGNITE_USER'],
+        'CONFLUENCE_API_TOKEN': os.environ['IGNITE_TOKEN']
+    }
+}
+
+with open(p, 'w') as f:
+    json.dump(config, f, indent=2, ensure_ascii=False)
+PYEOF
+
+  ok "Ignite Atlassian 연동 설정 완료"
+  info "Jira URL:       https://ignitecorp.atlassian.net"
+  info "Confluence URL: https://ignitecorp.atlassian.net/wiki"
+}
+
 # ─── 완료 ────────────────────────────────────────────────────────────────────
 done_msg() {
   echo ""
@@ -584,6 +674,7 @@ main() {
   install_claude
   install_mcp
   configure_hmg
+  configure_ignite
   done_msg
 }
 
